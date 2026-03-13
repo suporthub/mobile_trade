@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+  <title>Chart</title>
+
+  <style>
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+    }
+
+    #tv_chart_container {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Ensure TradingView left toolbar is visible with proper dimensions */
+    .layout__area--left {
+      display: flex !important;
+      width: 52px !important;
+      min-width: 52px !important;
+    }
+
+    /* Force drawing toolbar visibility - TradingView uses hashed class names like drawingToolbar-XXX */
+    [class*="drawingToolbar-"] {
+      background-color: inherit !important;
+    }
+
+    [class*="drawingToolbar-"][class*="isHidden-"] {
+      background-color: var(--tv-color-pane-background) !important;
+    }
+
+    [class*="drawingToolbar-"][class*="isHidden-"] [class*="inner-"] {
+      display: flex !important;
+    }
+
+    /* Force inner toolbar content visibility */
+    [class*="inner-BfVZxb4b"],
+    [class*="inner-"] {
+      display: flex !important;
+    }
+
+    /* Light theme - toolbar and icon colors */
+    html.theme-light [class*="drawingToolbar-"],
+    html.theme-light [class*="toolbar"],
+    html.theme-light .apply-common-tooltip,
+    html.theme-light .tv-header {
+      color: #131722 !important;
+    }
+
+    html.theme-light [class*="drawingToolbar-"] svg,
+    html.theme-light [class*="toolbar"] svg {
+      fill: #131722 !important;
+    }
+
+    /* Dark theme - toolbar and icon colors */
+    html.theme-dark [class*="drawingToolbar-"],
+    html.theme-dark [class*="toolbar"],
+    html.theme-dark .apply-common-tooltip,
+    html.theme-dark .tv-header {
+      color: #d1d4dc !important;
+    }
+
+    html.theme-dark [class*="drawingToolbar-"] svg,
+    html.theme-dark [class*="toolbar"] svg {
+      fill: #d1d4dc !important;
+    }
+  </style>
+
+  <!-- TradingView library -->
+  <script src="charting_library/charting_library.js"></script>
+  <!-- Datafeed -->
+  <script src="datafeed.js"></script>
+</head>
+
+<body>
+  <div id="tv_chart_container"></div>
+
+  <script>
+    (function () {
+      // --- FLUTTER BRIDGE (Single Source of Truth) ---
+
+      // Helper function to apply theme class to HTML element (required for TradingView CSS icons)
+      function applyThemeClass(theme) {
+        const isLight = theme === 'light' || theme === 'white';
+        // Remove both theme classes first, then add the appropriate one
+        document.documentElement.classList.remove('theme-dark', 'theme-light');
+        if (isLight) {
+          document.documentElement.classList.add('theme-light');
+        } else {
+          document.documentElement.classList.add('theme-dark');
+        }
+        document.body.style.background = isLight ? '#ffffff' : '#131722';
+      }
+
+      // Initialize global state - URL params take priority (Flutter passes current theme)
+      const urlParams = new URLSearchParams(window.location.search);
+      window.appState = {
+        symbol: urlParams.get('symbol') || localStorage.getItem('flutter_symbol') || 'AUDCAD',
+        theme: urlParams.get('theme') || localStorage.getItem('flutter_theme') || 'light'
+      };
+      // Sync to localStorage so subsequent getInitialTheme calls are consistent
+      localStorage.setItem('flutter_theme', window.appState.theme);
+      localStorage.setItem('flutter_symbol', window.appState.symbol);
+
+      // Apply initial theme class immediately
+      applyThemeClass(window.appState.theme);
+
+      // 1. setSymbol: Called by Flutter
+      window.setSymbol = function (symbol) {
+        console.log('[Bridge] setSymbol called: ' + symbol);
+        // Persist immediately
+        window.appState.symbol = symbol;
+        localStorage.setItem('flutter_symbol', symbol);
+
+        // Try to update chart if it exists
+        if (window.chart && window.chart.changeSymbol) {
+          window.chart.changeSymbol(symbol);
+        } else {
+          console.log('[Bridge] Chart not ready, symbol saved to storage for init');
+        }
+      };
+
+      // 2. setTheme: Called by Flutter to change chart theme
+      window.setTheme = function (theme) {
+        console.log('[Bridge] setTheme called: ' + theme);
+        // Persist immediately
+        window.appState.theme = theme;
+        localStorage.setItem('flutter_theme', theme);
+
+        // Apply theme class to HTML element for TradingView CSS icons
+        applyThemeClass(theme);
+
+        // Apply theme to ChartTabManager (which manages all chart tabs)
+        if (window.chart && typeof window.chart.applyTheme === 'function') {
+          console.log('[Bridge] Calling ChartTabManager.applyTheme()...');
+          window.chart.applyTheme();
+        } else {
+          console.log('[Bridge] ChartTabManager not ready or applyTheme not available');
+        }
+      };
+
+      // 3. getInitialSymbol: Helper for chart.js
+      window.getInitialSymbol = function () {
+        // Priority: URL Param > LocalStorage > Default
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get('symbol') || window.appState.symbol || 'AUDCAD';
+      };
+
+      // 4. getInitialTheme: Helper for chart.js
+      window.getInitialTheme = function () {
+        // Priority: appState (updated by setTheme) > URL Param > Default
+        // appState is the MOST CURRENT value after any setTheme call
+        if (window.appState && window.appState.theme) {
+          return window.appState.theme;
+        }
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get('theme') || 'light';
+      };
+
+      // -----------------------------------------------
+
+      // 5. PostMessage Listener (for Flutter Web iframe communication)
+      window.addEventListener('message', function (event) {
+        if (!event.data || typeof event.data !== 'object') return;
+
+        const { type, ...data } = event.data;
+        console.log('[Bridge] PostMessage received:', type, data);
+
+        switch (type) {
+          case 'callFunction':
+            // Call a window function with args
+            const funcName = data.function;
+            const args = data.args || [];
+            if (typeof window[funcName] === 'function') {
+              window[funcName].apply(null, args);
+            }
+            break;
+
+          case 'priceUpdate':
+            // Update market data cache
+            if (!window.marketDataCache) window.marketDataCache = new Map();
+            window.marketDataCache.set(data.symbol, {
+              ask: data.ask,
+              bid: data.bid
+            });
+            break;
+
+          case 'syncPositions':
+            // Sync position lines
+            try {
+              const positions = typeof data.positions === 'string'
+                ? JSON.parse(data.positions)
+                : data.positions;
+              if (window.chart && window.chart.getActiveTradingViewChart) {
+                const activeChart = window.chart.getActiveTradingViewChart();
+                if (activeChart && typeof activeChart.setOpenPositions === 'function') {
+                  activeChart.setOpenPositions(positions);
+                }
+              }
+            } catch (e) {
+              console.error('[Bridge] Error syncing positions:', e);
+            }
+            break;
+
+          case 'syncGroupData':
+            // Sync symbol group data (show_points, half_spread, contract_value, etc.)
+            try {
+              if (!window.symbolGroupData) window.symbolGroupData = new Map();
+              const groups = data.groups || {};
+              for (const [symbol, groupInfo] of Object.entries(groups)) {
+                window.symbolGroupData.set(symbol, groupInfo);
+              }
+              console.log('[Bridge] Symbol group data synced:', window.symbolGroupData.size, 'symbols');
+            } catch (e) {
+              console.error('[Bridge] Error syncing group data:', e);
+            }
+            break;
+        }
+      });
+
+      function initChart() {
+        if (typeof TradingView === 'undefined' || typeof TradingViewChart === 'undefined') {
+          console.log('[Init] Waiting for libraries...');
+          setTimeout(initChart, 100);
+          return;
+        }
+
+        // Apply theme class and background before chart loads
+        const theme = window.getInitialTheme();
+        applyThemeClass(theme);
+
+        if (!window.datafeed && typeof Datafeed !== 'undefined') {
+          window.datafeed = new Datafeed();
+        }
+
+        if (!window.chart) {
+          console.log('[Init] Creating TradingViewChart instance...');
+          window.chart = new TradingViewChart();
+        }
+      }
+
+      document.addEventListener('DOMContentLoaded', initChart);
+    })();
+  </script>
+
+  <script src="chart.js"></script>
+</body>
+
+</html>
