@@ -1,0 +1,2128 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deposit</title>
+    <link rel="icon" href="https://livefxhub.com/logo.png">
+    <script>
+        // Check if user is logged in
+        function checkSession() {
+            const accessToken = localStorage.getItem('accessToken');
+
+            if (!accessToken) {
+                // Clear any remaining session data
+                localStorage.removeItem('accessToken');
+                localStorage.removeItem('refreshToken');
+                localStorage.removeItem('email');
+                localStorage.removeItem('accountType');
+
+                // Redirect to login page
+                console.log('No valid session found, redirecting to login page');
+                window.location.href = 'terminallogin.html';
+                return false;
+            }
+
+            // Check if token is expired (if it's a JWT)
+            try {
+                const tokenData = JSON.parse(atob(accessToken.split('.')[1]));
+                if (tokenData.exp && tokenData.exp * 1000 < Date.now()) {
+                    // Token is expired, clear session and redirect
+                    localStorage.clear();
+                    window.location.href = 'terminallogin.html';
+                    return false;
+                }
+            } catch (e) {
+                // If token parsing fails, continue with session
+                console.log('Token validation skipped');
+            }
+
+            return true;
+        }
+
+        // Run session check immediately
+        if (!checkSession()) {
+            // This will prevent the rest of the page from loading if the session check fails
+            throw new Error('Session check failed - redirecting');
+        }
+
+        // Global 401 handler
+        const _originalFetch = window.fetch;
+        window.fetch = async function (...args) {
+            const response = await _originalFetch(...args);
+            if (response.status === 401) {
+                console.log('401 Unauthorized detected - redirecting to login');
+                localStorage.clear();
+                window.location.href = 'terminallogin.html';
+            }
+            return response
+        };
+    </script>
+    <!-- <script>
+        window.onload = function() {
+          const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+                            || window.innerWidth <= 1024;
+    
+          if (isMobile) {
+            // Only redirect if we're not already on the mobile page
+            if (!window.location.href.includes('mobile/deposit.html')) {
+              window.location.href = "mobile/deposit.html";
+            }
+          }
+        };
+      </script> -->
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            height: 100vh;
+            margin: 0;
+            width: 100%;
+            font-family: Arial, sans;
+            background-color: #1e222d;
+            color: rgba(255, 255, 255, 0.845);
+        }
+
+        .top-bar {
+            background-color: #131722;
+            color: rgba(255, 255, 255, 0.845);
+            padding: 15px;
+            text-align: center;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-family: Arial, sans;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .back-button {
+            position: absolute;
+            left: 20px;
+            color: rgba(255, 255, 255, 0.845);
+            text-decoration: none;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            transition: all 0.3s ease;
+        }
+
+        .back-button i {
+            margin-right: 5px;
+        }
+
+        .back-button:hover {
+            color: #36B34B;
+            transform: translateX(-3px);
+        }
+
+        .main-content {
+            display: flex;
+            height: calc(100vh - 60px);
+            /* Subtract top bar height */
+            padding: 20px;
+            gap: 20px;
+        }
+
+        .payment-methods-container {
+            flex: 1;
+            background: #131722;
+            border-radius: 8px;
+            padding: 25px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+            overflow-y: auto;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .payment-form-container {
+            flex: 2;
+            background: #131722;
+            border-radius: 8px;
+            padding: 25px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+            overflow-y: auto;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+
+
+        .container-title {
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.845);
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            font-family: Arial, sans;
+            letter-spacing: 0.5px;
+        }
+
+        .payment-methods {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .payment-card {
+            background: #1e222d;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            height: 140px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .payment-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.05));
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .payment-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+            border-color: #36B34B;
+        }
+
+        .payment-card:hover::before {
+            opacity: 1;
+        }
+
+        .payment-card.active {
+            background: #1e222d;
+            border: 1px solid #36B34B;
+            box-shadow: 0 8px 25px rgba(54, 179, 75, 0.15);
+        }
+
+        .payment-card .card-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .payment-card img {
+            max-width: 50px;
+            max-height: 30px;
+            object-fit: contain;
+            filter: brightness(0.9);
+        }
+
+        .payment-card .card-title {
+            font-size: 14px;
+            font-family: Arial, sans;
+            margin-left: 20px;
+            color: rgba(255, 255, 255, 0.845);
+            letter-spacing: 0.3px;
+        }
+
+        .payment-card .card-info {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .payment-card .info-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            font-family: Arial, sans;
+        }
+
+        .payment-card .info-label {
+            color: rgba(255, 255, 255, 0.6);
+            font-family: Arial, sans;
+        }
+
+        .payment-card .info-value {
+            color: #36B34B;
+            font-family: Arial, sans;
+        }
+
+        /* Add scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1e222d;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Add loading overlay styles */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(19, 23, 34, 0.9);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top: 3px solid #36B34B;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: rgba(255, 255, 255, 0.845);
+            font-family: Arial, sans;
+            font-size: 12px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: Arial, sans;
+            background: #1e222d;
+            color: rgba(255, 255, 255, 0.845);
+            transition: all 0.3s ease;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #36B34B;
+            box-shadow: 0 0 0 1px #36B34B;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 15px;
+        }
+
+        .form-row .form-group {
+            flex: 1;
+        }
+
+        .confirm-btn {
+            width: 100%;
+            padding: 12px;
+            background: #36B34B;
+            color: rgba(255, 255, 255, 0.845);
+            border: none;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: Arial, sans;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .confirm-btn:hover {
+            background: #2d9640;
+            transform: translateY(-1px);
+        }
+
+        .confirm-btn:active {
+            transform: translateY(0);
+        }
+
+        .checkmark {
+            color: #36B34B;
+            margin-left: 10px;
+        }
+
+        .terms-content {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 12px;
+            font-family: Arial, sans;
+            line-height: 1.6;
+        }
+
+        .terms-content h3 {
+            color: rgba(255, 255, 255, 0.845);
+            margin: 15px 0 10px;
+            font-size: 12px;
+            font-family: Arial, sans;
+        }
+
+        .terms-content ul {
+            padding-left: 20px;
+            margin: 10px 0;
+            font-size: 12px;
+            font-family: Arial, sans;
+        }
+
+        .terms-content li {
+            margin-bottom: 8px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: Arial, sans;
+            margin-bottom: 10px;
+            background: #1e222d;
+            color: rgba(255, 255, 255, 0.845);
+            transition: all 0.3s ease;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #36B34B;
+            box-shadow: 0 0 0 1px #36B34B;
+        }
+
+        select.form-control {
+            appearance: none;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(255, 255, 255, 0.845)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 1rem center;
+            background-size: 1em;
+            padding-right: 2.5rem;
+        }
+
+        .terms-section {
+            margin-bottom: 10px;
+        }
+
+        .terms-section h3 {
+            color: #D80000;
+            margin-bottom: 10px;
+            font-size: 14px;
+            font-family: Arial, sans;
+            font-weight: lighter;
+        }
+
+        .terms-section p {
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 15px;
+            font-size: 12px;
+            font-family: Arial, sans;
+        }
+
+        .terms-section ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .terms-section ul li {
+            color: #36B34B;
+            cursor: pointer;
+            margin-bottom: 12px;
+            font-size: 12px;
+            font-family: Arial, sans;
+            transition: all 0.3s ease;
+        }
+
+        .terms-section ul li:hover {
+            color: #2d9640;
+            text-decoration: none;
+            padding-left: 5px;
+        }
+
+        .card-preview {
+            margin-bottom: 20px;
+        }
+
+        .card-display {
+            background: linear-gradient(135deg, #36B34B 0%, #2d9640 100%);
+            border-radius: 8px;
+            padding: 20px;
+            color: rgba(255, 255, 255, 0.845);
+            position: relative;
+            height: 180px;
+            margin-bottom: 15px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .chip-icon {
+            margin-bottom: 20px;
+        }
+
+        .chip-icon i {
+            margin-right: 10px;
+            font-size: 20px;
+            color: rgba(255, 255, 255, 0.845);
+        }
+
+        .card-number {
+            font-size: 22px;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+            color: rgba(255, 255, 255, 0.845);
+        }
+
+        .card-details {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+
+        .expiry .label {
+            display: block;
+            font-size: 12px;
+            margin-bottom: 5px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .card-type {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+        }
+
+        .card-type img {
+            height: 30px;
+            filter: brightness(0.9);
+        }
+
+        .form-inputs {
+            padding: 15px 20px;
+        }
+
+        .form-actions {
+            margin: 12px 0;
+        }
+
+        .scan-btn {
+            background: none;
+            border: none;
+            color: #36B34B;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            font-family: Arial, sans;
+            transition: all 0.3s ease;
+        }
+
+        .scan-btn:hover {
+            color: #2d9640;
+            transform: translateX(2px);
+        }
+
+        .save-info {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 12px;
+            font-family: Arial, sans;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .save-info i {
+            color: #36B34B;
+        }
+
+        .payment-card[data-method="credit-card"],
+        .payment-card[data-method="bank-transfer"] {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .payment-card[data-method="credit-card"]:hover,
+        .payment-card[data-method="bank-transfer"]:hover {
+            transform: translateY(-2px);
+            border-color: #36B34B;
+        }
+
+        #creditCardForm .form-group {
+            margin-bottom: 12px;
+        }
+
+        #creditCardForm .form-control {
+            padding: 10px;
+            margin-bottom: 0;
+            background: #1e222d;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.845);
+        }
+
+        #creditCardForm label {
+            margin-bottom: 4px;
+            font-size: 12px;
+            font-family: Arial, sans;
+            color: rgba(255, 255, 255, 0.845);
+        }
+
+        #creditCardForm .save-info {
+            text-align: center;
+            width: 100%;
+            justify-content: center;
+            margin-bottom: 12px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .dark-theme {
+            background-color: #131722;
+            color: rgba(255, 255, 255, 0.845);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .orange-gradient {
+            background: linear-gradient(45deg, #D80000, #ff4b4b);
+        }
+
+        .purple-gradient {
+            background: linear-gradient(45deg, #36B34B, #2d9640);
+        }
+
+        .card-brand {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: rgba(255, 255, 255, 0.845);
+        }
+
+        .preview-label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 5px;
+        }
+
+        .preview-stars {
+            font-size: 20px;
+            letter-spacing: 2px;
+            display: inline-block;
+            color: rgba(255, 255, 255, 0.845);
+        }
+
+        .preview-number {
+            font-size: 20px;
+            margin-left: 10px;
+            color: rgba(255, 255, 255, 0.845);
+        }
+
+        .preview-validity {
+            position: absolute;
+            bottom: 25px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .preview-validity span:first-child {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        .input-group label {
+            display: block;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 8px;
+            font-size: 12px;
+            font-family: Arial, sans;
+        }
+
+        .dark-input {
+            background: #1e222d;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.845);
+            border-radius: 4px;
+            padding: 10px;
+            width: 100%;
+            font-size: 12px;
+            font-family: Arial, sans;
+            transition: all 0.3s ease;
+        }
+
+        .dark-input:focus {
+            outline: none;
+            border-color: #36B34B;
+            box-shadow: 0 0 0 1px #36B34B;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 15px;
+        }
+
+        .half {
+            flex: 1;
+        }
+
+        .save-button {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 4px;
+            color: rgba(255, 255, 255, 0.845);
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+            font-size: 14px;
+            font-family: Arial, sans;
+            transition: all 0.3s ease;
+        }
+
+        .save-button.orange {
+            background: #D80000;
+        }
+
+        .save-button.purple {
+            background: #36B34B;
+        }
+
+        .save-button:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .save-button:active {
+            transform: translateY(0);
+        }
+
+        /* Add new styles for coming soon cards */
+        .payment-card.coming-soon {
+            background: #1e222d;
+            opacity: 0.8;
+            cursor: not-allowed;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .payment-card.coming-soon:hover {
+            transform: none;
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .coming-soon-label {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #131722;
+            color: #D80000;
+            padding: 8px 20px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: Arial, sans;
+            letter-spacing: 1px;
+            z-index: 2;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .payment-card.coming-soon .card-info,
+        .payment-card.coming-soon .card-header {
+            opacity: 0.5;
+        }
+
+        /* Add these new styles for the currency dropdown */
+        .currency-option {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px;
+            color: rgba(255, 255, 255, 0.845);
+        }
+
+        .currency-option img {
+            width: 24px;
+            height: 24px;
+            object-fit: contain;
+            filter: brightness(0.9);
+        }
+
+        .currency-select {
+            padding: 0;
+            background: #1e222d;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.845);
+        }
+
+        .currency-select option {
+            padding: 8px;
+            background: #1e222d;
+            color: rgba(255, 255, 255, 0.845);
+        }
+
+        /* Add styles for the custom select wrapper */
+        .select-wrapper {
+            position: relative;
+            width: 100%;
+        }
+
+        .custom-select {
+            width: 100%;
+            padding: 12px;
+            background: #1e222d;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            cursor: pointer;
+            position: relative;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            font-family: Arial, sans;
+            color: rgba(255, 255, 255, 0.845);
+            transition: all 0.3s ease;
+        }
+
+        .custom-select:hover {
+            border-color: #36B34B;
+        }
+
+        .custom-select::after {
+            content: '▼';
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+            pointer-events: none;
+        }
+
+        .custom-select-options {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #1e222d;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            margin-top: 5px;
+            z-index: 1000;
+            display: none;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+            font-size: 12px;
+            font-family: Arial, sans;
+        }
+
+        .custom-option {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: rgba(255, 255, 255, 0.845);
+        }
+
+        .custom-option:hover {
+            background: #131722;
+            color: #36B34B;
+        }
+
+        .custom-option img,
+        .selected-currency img {
+            width: 24px;
+            height: 24px;
+            object-fit: contain;
+            filter: brightness(0.9);
+            border-radius: 50%;
+            background: #1e222d;
+            padding: 2px;
+        }
+
+        .selected-currency {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding-right: 30px;
+            color: rgba(255, 255, 255, 0.845);
+        }
+
+        .loader {
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            border-top: 3px solid #36B34B;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Add styles for preset amount buttons */
+        .preset-amounts {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+            margin-bottom: 20px;
+        }
+
+        .preset-amount-btn {
+            background: #1e222d;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            padding: 8px 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 12px;
+            font-family: Arial, sans;
+            color: rgba(255, 255, 255, 0.845);
+            flex: 1;
+            min-width: 80px;
+            text-align: center;
+        }
+
+        .preset-amount-btn:hover {
+            background: #131722;
+            transform: translateY(-2px);
+            border-color: #36B34B;
+        }
+
+        .preset-amount-btn.active {
+            background: #131722;
+            border-color: #36B34B;
+            color: #36B34B;
+        }
+
+        /* Custom Modal Styles */
+        .custom-modal {
+            display: none;
+            position: fixed;
+            z-index: 10000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.7);
+            justify-content: center;
+            align-items: center;
+        }
+
+        .custom-modal-content {
+            background-color: #1e222d;
+            border: 1px solid rgba(255, 59, 48, 0.5);
+            /* Reddish border for error */
+            border-radius: 8px;
+            padding: 25px;
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+            position: relative;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .custom-modal-icon {
+            font-size: 40px;
+            margin-bottom: 20px;
+        }
+
+        .custom-modal-icon.error {
+            color: #ff3b30;
+        }
+
+        .custom-modal-title {
+            font-size: 18px;
+            margin-bottom: 10px;
+            color: #fff;
+            font-family: Arial, sans;
+            font-weight: bold;
+        }
+
+        .custom-modal-message {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 25px;
+            line-height: 1.5;
+            font-family: Arial, sans;
+        }
+
+        .custom-modal-btn {
+            background-color: #36B34B;
+            color: white;
+            border: none;
+            padding: 10px 25px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+            font-family: Arial, sans;
+        }
+
+        .custom-modal-btn:hover {
+            background-color: #2d9640;
+        }
+
+        .custom-modal-close {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            line-height: 1;
+        }
+
+        .custom-modal-close:hover {
+            color: #fff;
+        }
+    </style>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
+    <script src="https://js.stripe.com/v3/"></script>
+</head>
+
+<body>
+    <div class="top-bar">
+        <a href="charts.html" class="back-button"><i class="fas fa-arrow-left"></i> Back</a>
+        <h1>Live<span style="color:#58a6ff;"> Fx </span>Hub</h1>
+    </div>
+
+    <div class="main-content">
+        <!-- Payment Methods Container -->
+        <div class="payment-methods-container">
+            <h2 class="container-title">Payment Methods</h2>
+            <div class="payment-methods">
+                <div class="payment-card active" data-method="crypto">
+                    <div class="card-header">
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/4/46/Bitcoin.svg/1200px-Bitcoin.svg.png"
+                            alt="Bitcoin">
+                        <span class="card-title">Crypto Payment</span>
+                    </div>
+                    <div class="card-info">
+                        <div class="info-row">
+                            <span class="info-label">Processing Time:</span>
+                            <span class="info-value">Instant</span>
+                            <span class="info-value"> - 15 Minutes</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Fee:</span>
+                            <span class="info-value">0%</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="payment-card" data-method="credit-card">
+                    <div class="card-header">
+                        <img src="https://cdn-icons-png.flaticon.com/512/1086/1086741.png" alt="Credit Card">
+                        <span class="card-title">Other Payment Option</span>
+                    </div>
+                    <div class="card-info">
+                        <div class="info-row">
+                            <span class="info-label">Processing Time:</span>
+                            <span class="info-value">Instant</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Fee:</span>
+                            <span class="info-value">0%</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="payment-card coming-soon" data-method="upi">
+                    <span class="coming-soon-label">COMING SOON</span>
+                    <div class="card-header">
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/UPI-Logo-vector.svg/1200px-UPI-Logo-vector.svg.png"
+                            alt="UPI">
+                        <span class="card-title">UPI Payment</span>
+                    </div>
+                    <div class="card-info">
+                        <div class="info-row">
+                            <span class="info-label">Processing Time:</span>
+                            <span class="info-value">Instant</span>
+                            <span class="info-value"> - 1 Hour</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Fee:</span>
+                            <span class="info-value">0%</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="payment-card coming-soon" data-method="bank-transfer">
+                    <span class="coming-soon-label">COMING SOON</span>
+                    <div class="card-header">
+                        <img src="https://cdn-icons-png.flaticon.com/512/6963/6963703.png" alt="Bank Transfer">
+                        <span class="card-title">Bank Transfer</span>
+                    </div>
+                    <div class="card-info">
+                        <div class="info-row">
+                            <span class="info-label">Processing Time:</span>
+                            <span class="info-value">Instant</span>
+                            <span class="info-value"> - 30 Minutes</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Fee:</span>
+                            <span class="info-value">0%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment Form Container -->
+        <div class="payment-form-container">
+            <h2 class="container-title">Payment Details</h2>
+            <!-- Crypto Payment Form -->
+            <div class="payment-form" id="cryptoForm">
+                <div class="form-group">
+                    <label>Select Currency</label>
+                    <div class="select-wrapper">
+                        <div class="custom-select" id="currencySelect">
+                            <div class="selected-currency">
+                                <img src="https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png"
+                                    alt="USDT" width="24" style="width: 24px; height: 24px; object-fit: contain;">
+                                <span>USDT</span>
+                            </div>
+                        </div>
+                        <div class="custom-select-options" id="currencyOptions">
+                            <div class="custom-option" data-value="usdt">
+                                <img src="https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png"
+                                    alt="USDT" width="24" style="width: 24px; height: 24px; object-fit: contain;">
+                                <span>USDT</span>
+                            </div>
+                            <div class="custom-option" data-value="usdc">
+                                <img src="https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png"
+                                    alt="USDC" width="24">
+                                <span>USDC</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Select Network</label>
+                    <div class="select-wrapper">
+                        <div class="custom-select" id="networkSelect">
+                            <div class="selected-currency">
+                                <img src="https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png"
+                                    alt="BSC" width="24">
+                                <span>Binance Smart Chain (BSC)</span>
+                            </div>
+                        </div>
+                        <div class="custom-select-options" id="networkOptions">
+                            <div class="custom-option" data-value="bsc">
+                                <img src="https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png"
+                                    alt="BSC" width="24">
+                                <span>Binance Smart Chain (BSC)</span>
+                            </div>
+                            <div class="custom-option" data-value="tron">
+                                <img src="https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/tron/info/logo.png"
+                                    alt="TRON" width="24">
+                                <span>TRON (TRX)</span>
+                            </div>
+                            <div class="custom-option" data-value="eth">
+                                <img src="https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png"
+                                    alt="Ethereum" width="24">
+                                <span>Ethereum (ETH)</span>
+                            </div>
+                            <div class="custom-option" data-value="polygon">
+                                <img src="https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png"
+                                    alt="Polygon" width="24">
+                                <span>Polygon (MATIC)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Select Account -->
+                <div class="form-group">
+                    <label>Select Account</label>
+                    <div class="select-wrapper">
+                        <div class="custom-select" id="accountSelect">
+                            <div class="selected-currency">
+                                <span>Loading...</span>
+                            </div>
+                        </div>
+                        <div class="custom-select-options" id="accountOptions"></div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Amount</label>
+                    <input type="text" class="form-control" id="cryptoAmount" placeholder="Enter your amount">
+                    <div class="preset-amounts">
+                        <div class="preset-amount-btn" data-amount="100">100</div>
+                        <div class="preset-amount-btn" data-amount="500">500</div>
+                        <div class="preset-amount-btn" data-amount="1000">1,000</div>
+                        <div class="preset-amount-btn" data-amount="5000">5,000</div>
+                        <div class="preset-amount-btn" data-amount="10000">10,000</div>
+                        <div class="preset-amount-btn" data-amount="25000">25,000</div>
+                    </div>
+                </div>
+
+                <button class="confirm-btn" onclick="handleCryptoPayment()">Confirm Selection</button>
+            </div>
+
+            <!-- UPI Payment Form -->
+            <div class="payment-form" id="upiForm" style="display: none;">
+                <div class="form-group">
+                    <label>Enter UPI ID</label>
+                    <input type="text" class="form-control" placeholder="example@upi">
+                </div>
+
+                <div class="form-group">
+                    <label>Amount</label>
+                    <input type="text" class="form-control" placeholder="Enter your amount">
+                </div>
+
+                <div class="form-group">
+                    <label>Description (Optional)</label>
+                    <input type="text" class="form-control" placeholder="Add a note">
+                </div>
+
+                <button class="confirm-btn">Pay Now</button>
+            </div>
+
+            <!-- Credit Card Payment Form -->
+            <div class="payment-form" id="creditCardForm" style="display: none;">
+                <div class="form-group">
+                    <label>Select Currency</label>
+                    <div class="select-wrapper">
+                        <div class="custom-select" id="creditCardCurrencySelect">
+                            <div class="selected-currency">
+                                <img src="https://flagcdn.com/w40/us.png" alt="USD" width="24"
+                                    style="border-radius: 50%; width: 24px; height: 24px; object-fit: cover;">
+                                <span>USD</span>
+                            </div>
+                        </div>
+                        <div class="custom-select-options" id="creditCardCurrencyOptions">
+                            <div class="custom-option" data-value="USD">
+                                <img src="https://flagcdn.com/w40/us.png" alt="USD" width="24"
+                                    style="border-radius: 50%; width: 24px; height: 24px; object-fit: cover;">
+                                <span>USD</span>
+                            </div>
+                            <div class="custom-option" data-value="EUR">
+                                <img src="https://flagcdn.com/w40/eu.png" alt="EUR" width="24"
+                                    style="border-radius: 50%; width: 24px; height: 24px; object-fit: cover;">
+                                <span>EUR</span>
+                            </div>
+                            <div class="custom-option" data-value="INR">
+                                <img src="https://flagcdn.com/w40/in.png" alt="INR" width="24"
+                                    style="border-radius: 50%; width: 24px; height: 24px; object-fit: cover;">
+                                <span>INR</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Select Account</label>
+                    <div class="select-wrapper">
+                        <div class="custom-select" id="creditCardAccountSelect">
+                            <div class="selected-currency">
+                                <span>Loading...</span>
+                            </div>
+                        </div>
+                        <div class="custom-select-options" id="creditCardAccountOptions"></div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Amount</label>
+                    <input type="text" class="form-control" id="creditCardAmount" placeholder="Enter amount">
+                    <div class="preset-amounts">
+                        <div class="preset-amount-btn credit-card-preset" data-amount="100">100</div>
+                        <div class="preset-amount-btn credit-card-preset" data-amount="500">500</div>
+                        <div class="preset-amount-btn credit-card-preset" data-amount="1000">1,000</div>
+                        <div class="preset-amount-btn credit-card-preset" data-amount="5000">5,000</div>
+                        <div class="preset-amount-btn credit-card-preset" data-amount="10000">10,000</div>
+                        <div class="preset-amount-btn credit-card-preset" data-amount="25000">25,000</div>
+                    </div>
+                </div>
+
+                <button class="confirm-btn" onclick="handleCreditCardPayment()">Deposit Now</button>
+
+                <!-- Stripe Payment Element Container -->
+                <div id="stripe-container"
+                    style="display:none; margin-top: 20px; background: #131722; padding: 20px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+                    <h3 style="color: #fff; font-size: 16px; margin-bottom: 20px; font-family: Arial, sans-serif;">
+                        Payment Details</h3>
+                    <div id="payment-element"></div>
+                    <button id="stripe-submit" class="confirm-btn"
+                        style="margin-top: 20px; background-color: #36B34B; width: 100%;">Pay Now</button>
+                    <div id="stripe-error-message"
+                        style="color: #ff3b30; margin-top: 15px; font-size: 12px; text-align: center;"></div>
+                </div>
+            </div>
+
+            <!-- Bank Transfer Payment Form -->
+            <div class="payment-form dark-theme" id="bankTransferForm" style="display: none;">
+                <div class="card-preview">
+                    <div class="card-display purple-gradient">
+                        <div class="card-brand">VISA</div>
+                        <div class="preview-label">CARD NUMBER</div>
+                        <div class="preview-stars">•••• •••• ••••</div>
+                        <span class="preview-number" id="displayLastFourBank">4288</span>
+                        <div class="preview-validity">
+                            <span>VALID THROUGH</span>
+                            <span id="displayValidityBank">07/31</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-inputs">
+                    <div class="input-group">
+                        <label>Card number</label>
+                        <input type="text" class="dark-input" id="bankCardNumber" placeholder="1234 5678 7890 4288"
+                            maxlength="19">
+                    </div>
+
+                    <div class="input-group">
+                        <label>Name on card</label>
+                        <input type="text" class="dark-input" id="bankCardName" placeholder="JOHN M SMITH">
+                    </div>
+
+                    <div class="input-row">
+                        <div class="input-group half">
+                            <label>Expiry date</label>
+                            <input type="text" class="dark-input" id="bankExpiryDate" placeholder="07/31" maxlength="5">
+                        </div>
+                        <div class="input-group half">
+                            <label>Security Code</label>
+                            <input type="password" class="dark-input" id="bankSecurityCode" placeholder="•••"
+                                maxlength="3">
+                        </div>
+                    </div>
+
+                    <button class="save-button purple">SAVE CHANGES</button>
+                </div>
+            </div>
+
+            <!-- Add loading screen -->
+            <div id="loadingScreen"
+                style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); justify-content: center; align-items: center; z-index: 9999;">
+                <div style="color: white; text-align: center;">
+                    <div class="loader"></div>
+                    <p>Processing your request...</p>
+                </div>
+            </div>
+        </div>
+
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const paymentCards = document.querySelectorAll('.payment-card');
+            const paymentForms = {
+                crypto: document.getElementById('cryptoForm'),
+                upi: document.getElementById('upiForm'),
+                'credit-card': document.getElementById('creditCardForm'),
+                'bank-transfer': document.getElementById('bankTransferForm')
+            };
+
+            // Hide all forms except default (crypto)
+            function hideAllForms() {
+                Object.values(paymentForms).forEach(form => form.style.display = 'none');
+            }
+
+            // Show specific form
+            function showForm(method) {
+                hideAllForms();
+                if (paymentForms[method]) {
+                    paymentForms[method].style.display = 'block';
+                }
+            }
+
+
+
+            paymentCards.forEach(card => {
+                card.addEventListener('click', function () {
+                    // Skip if card is marked as coming soon
+                    if (this.classList.contains('coming-soon')) {
+                        return;
+                    }
+
+                    // Remove active class from all cards
+                    paymentCards.forEach(c => c.classList.remove('active'));
+                    // Add active class to clicked card
+                    this.classList.add('active');
+
+                    // Get payment method from data attribute
+                    const method = this.dataset.method;
+
+                    // Show the appropriate form
+                    hideAllForms();
+                    if (paymentForms[method]) {
+                        paymentForms[method].style.display = 'block';
+                    }
+
+
+                });
+            });
+
+            // Credit Card Dropdowns Logic
+            const creditCardCurrencySelect = document.getElementById('creditCardCurrencySelect');
+            const creditCardCurrencyOptions = document.getElementById('creditCardCurrencyOptions');
+            const creditCardAccountSelect = document.getElementById('creditCardAccountSelect');
+            const creditCardAccountOptions = document.getElementById('creditCardAccountOptions');
+
+            if (creditCardCurrencySelect && creditCardCurrencyOptions) {
+                creditCardCurrencySelect.addEventListener('click', function (e) {
+                    const isVisible = creditCardCurrencyOptions.style.display === 'block';
+                    creditCardCurrencyOptions.style.display = isVisible ? 'none' : 'block';
+                    e.stopPropagation();
+                });
+
+                const options = creditCardCurrencyOptions.querySelectorAll('.custom-option');
+                options.forEach(opt => {
+                    opt.addEventListener('click', function () {
+                        const img = this.querySelector('img').cloneNode(true);
+                        const span = this.querySelector('span').cloneNode(true);
+                        const sel = creditCardCurrencySelect.querySelector('.selected-currency');
+                        sel.innerHTML = '';
+                        sel.appendChild(img);
+                        sel.appendChild(span);
+                        creditCardCurrencyOptions.style.display = 'none';
+                    });
+                });
+            }
+
+            if (creditCardAccountSelect && creditCardAccountOptions) {
+                creditCardAccountSelect.addEventListener('click', function (e) {
+                    const isVisible = creditCardAccountOptions.style.display === 'block';
+                    creditCardAccountOptions.style.display = isVisible ? 'none' : 'block';
+                    e.stopPropagation();
+                });
+            }
+
+            // Global Click Listener update to close new dropdowns
+            document.addEventListener('click', function (e) {
+                if (creditCardCurrencySelect && !creditCardCurrencySelect.contains(e.target)) {
+                    if (creditCardCurrencyOptions) creditCardCurrencyOptions.style.display = 'none';
+                }
+                if (creditCardAccountSelect && !creditCardAccountSelect.contains(e.target)) {
+                    if (creditCardAccountOptions) creditCardAccountOptions.style.display = 'none';
+                }
+            });
+
+            // Define valid combinations for validation
+            const validCombinations = {
+                'BSC': ['USDT', 'USDC'],
+                'TRON': ['USDT'],
+                'ETH': ['USDC', 'USDT'],
+                'MATIC': ['USDC', 'USDT']
+            };
+
+            // Create reverse mapping for currencies to networks
+            const currencyToNetworks = {};
+            Object.entries(validCombinations).forEach(([network, currencies]) => {
+                currencies.forEach(currency => {
+                    if (!currencyToNetworks[currency]) {
+                        currencyToNetworks[currency] = [];
+                    }
+                    currencyToNetworks[currency].push(network);
+                });
+            });
+
+            // Network currencies configuration with network display names
+            const networkCurrencies = {
+                eth: [
+                    {
+                        symbol: 'USDT',
+                        name: 'USDT',
+                        logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png'
+                    },
+                    {
+                        symbol: 'USDC',
+                        name: 'USDC',
+                        logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png'
+                    }
+                ],
+                bsc: [
+                    {
+                        symbol: 'USDT',
+                        name: 'USDT',
+                        logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/assets/USDT-6D8/logo.png'
+                    },
+                    {
+                        symbol: 'USDC',
+                        name: 'USDC',
+                        logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/assets/USDC-CD2/logo.png'
+                    }
+                ],
+                polygon: [
+                    {
+                        symbol: 'USDC',
+                        name: 'USDC',
+                        logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/assets/0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174/logo.png'
+                    },
+                    {
+                        symbol: 'USDT',
+                        name: 'USDT',
+                        logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/assets/0xc2132D05D31c914a87C6611C10748AEb04B58e8F/logo.png'
+                    }
+                ],
+                tron: [
+                    {
+                        symbol: 'USDT',
+                        name: 'USDT',
+                        logo: 'https://coin.top/production/logo/usdtlogo.png'
+                    }
+                ]
+            };
+
+            // Network display names mapping
+            const networkDisplayNames = {
+                'eth': 'Ethereum (ETH)',
+                'bsc': 'Binance Smart Chain (BSC)',
+                'polygon': 'Polygon (MATIC)',
+                'tron': 'TRON (TRX)'
+            };
+
+            // Network code to API code mapping
+            const networkToApiCode = {
+                'eth': 'ETH',
+                'bsc': 'BSC',
+                'polygon': 'MATIC',
+                'tron': 'TRON'
+            };
+
+            const currencySelect = document.getElementById('currencySelect');
+            const currencyOptions = document.getElementById('currencyOptions');
+            const networkSelect = document.getElementById('networkSelect');
+            const networkOptions = document.getElementById('networkOptions');
+            const accountSelect = document.getElementById('accountSelect');
+            const accountOptions = document.getElementById('accountOptions');
+
+            // Get all available networks for reference
+            // ================= Account Dropdown Logic =================
+            async function loadAccounts() {
+                try {
+                    const accessToken = localStorage.getItem('accessToken');
+                    if (!accessToken) return;
+                    const res = await fetch('https://testing.livefxhub.com/api/internal-transfers/accounts', {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`,
+                            'Accept': 'application/json'
+                        }
+                    });
+                    const json = await res.json();
+                    if (!json.success || !json.data) return;
+                    const accs = [];
+                    if (json.data.mainAccount) accs.push(json.data.mainAccount);
+                    if (Array.isArray(json.data.strategyProviderAccounts)) accs.push(...json.data.strategyProviderAccounts);
+                    if (Array.isArray(json.data.copyFollowerAccounts)) accs.push(...json.data.copyFollowerAccounts);
+
+                    // Ensure the specific Live account is present (User Request ID: 80)
+                    const liveAccountExists = accs.some(a => a.id === 80);
+                    if (!liveAccountExists) {
+                        accs.unshift({
+                            "id": 80,
+                            "name": "Main Trading Account",
+                            "account_number": "LIVE-75B051",
+                            "wallet_balance": 168613.5484,
+                            "type": "main",
+                            "account_number": "LIVE-75B051"
+                        });
+                    }
+
+                    populateAccountOptions(accs);
+                } catch (err) {
+                    console.error('Failed to load accounts', err);
+                }
+            }
+
+            function typeSuffix(type) {
+                if (type === 'main') return 'main';
+                if (type === 'strategy_provider') return 'SP';
+                if (type === 'copy_follower') return 'CF';
+                return type;
+            }
+
+            function populateAccountOptions(arr) {
+                // Populate Crypto Account Options
+                populateSpecificAccountOptions(arr, document.getElementById('accountOptions'), document.getElementById('accountSelect'));
+                // Populate Credit Card Account Options
+                const creditOptions = document.getElementById('creditCardAccountOptions');
+                const creditSelect = document.getElementById('creditCardAccountSelect');
+                if (creditOptions && creditSelect) {
+                    populateSpecificAccountOptions(arr, creditOptions, creditSelect);
+                }
+            }
+
+            function populateSpecificAccountOptions(arr, optionsContainer, selectElement) {
+                if (!optionsContainer || !selectElement) return;
+                optionsContainer.innerHTML = '';
+                arr.forEach(acc => {
+                    const suffix = typeSuffix(acc.type);
+                    const option = document.createElement('div');
+                    option.className = 'custom-option';
+                    option.dataset.id = acc.id;
+                    option.textContent = `${acc.name} (${suffix})`;
+                    option.addEventListener('click', () => {
+                        const sel = selectElement.querySelector('.selected-currency');
+                        sel.innerHTML = `<span>${acc.name} (${suffix})</span>`;
+                        selectElement.dataset.id = acc.id;
+                        selectElement.dataset.type = acc.type;
+                        selectElement.dataset.accountNumber = acc.account_number || '';
+                        optionsContainer.style.display = 'none';
+                    });
+                    option.dataset.accountNumber = acc.account_number || '';
+                    optionsContainer.appendChild(option);
+                });
+                if (optionsContainer.firstElementChild) {
+                    optionsContainer.firstElementChild.click();
+                }
+            }
+
+            accountSelect.addEventListener('click', function (e) {
+                const isVisible = accountOptions.style.display === 'block';
+                accountOptions.style.display = isVisible ? 'none' : 'block';
+                e.stopPropagation();
+            });
+            // ================= End Account Dropdown =================
+
+            // Get all available networks for reference
+            const allNetworkOptions = Array.from(networkOptions.querySelectorAll('.custom-option'));
+
+            // Function to get currently selected currency
+            function getSelectedCurrency() {
+                const selectedCurrencyElement = currencySelect.querySelector('.selected-currency span');
+                return selectedCurrencyElement ? selectedCurrencyElement.textContent.toUpperCase() : null;
+            }
+
+            // Function to get currently selected network code
+            function getSelectedNetworkCode() {
+                const selectedNetworkElement = networkSelect.querySelector('.selected-currency span');
+                if (!selectedNetworkElement) return null;
+
+                const networkText = selectedNetworkElement.textContent;
+                // Map the display name back to network code
+                for (const [code, displayName] of Object.entries(networkDisplayNames)) {
+                    if (networkText.includes(displayName.split(' ')[0])) {
+                        return code;
+                    }
+                }
+                return null;
+            }
+
+            // Function to update network options based on selected currency
+            function updateNetworkOptionsForCurrency(currency) {
+                if (!currency) return;
+
+                // Get compatible networks for this currency
+                const compatibleNetworks = currencyToNetworks[currency] || [];
+
+                // Clear current network options
+                networkOptions.innerHTML = '';
+
+                // Add only compatible network options
+                allNetworkOptions.forEach(option => {
+                    const networkCode = option.getAttribute('data-value');
+                    const apiCode = networkToApiCode[networkCode];
+
+                    if (compatibleNetworks.includes(apiCode)) {
+                        // Clone the option
+                        const newOption = option.cloneNode(true);
+                        networkOptions.appendChild(newOption);
+
+                        // Add click event listener
+                        newOption.addEventListener('click', function () {
+                            const img = this.querySelector('img').cloneNode(true);
+                            const span = this.querySelector('span').cloneNode(true);
+                            const selectedNetwork = networkSelect.querySelector('.selected-currency');
+                            selectedNetwork.innerHTML = '';
+                            selectedNetwork.appendChild(img);
+                            selectedNetwork.appendChild(span);
+                            networkOptions.style.display = 'none';
+
+                            // Update currency options based on selected network
+                            updateCurrencyOptionsForNetwork(networkCode);
+                        });
+                    }
+                });
+
+                // If current selected network is not compatible, update it to the first compatible one
+                const currentNetworkCode = getSelectedNetworkCode();
+                const currentApiCode = networkToApiCode[currentNetworkCode];
+
+                if (!compatibleNetworks.includes(currentApiCode) && networkOptions.firstElementChild) {
+                    // Simulate click on first compatible network
+                    networkOptions.firstElementChild.click();
+                }
+            }
+
+            // Function to update currency options based on selected network
+            function updateCurrencyOptionsForNetwork(networkCode) {
+                if (!networkCode) return;
+
+                const currencies = networkCurrencies[networkCode] || [];
+                const currencyOptionsHtml = currencies.map(currency => `
+                    <div class="custom-option" data-value="${currency.symbol.toLowerCase()}">
+                        <img src="${currency.logo}" alt="${currency.name}" width="24">
+                        <span>${currency.name}</span>
+                    </div>
+                `).join('');
+
+                currencyOptions.innerHTML = currencyOptionsHtml;
+
+                // Get current selected currency
+                const selectedCurrency = currencySelect.querySelector('.selected-currency');
+                const currentCurrencyText = selectedCurrency.querySelector('span')?.textContent.toUpperCase();
+
+                // Check if current currency is compatible with selected network
+                const apiNetworkCode = networkToApiCode[networkCode];
+                const compatibleCurrencies = validCombinations[apiNetworkCode] || [];
+
+                if (!compatibleCurrencies.includes(currentCurrencyText) && currencies.length > 0) {
+                    // Update to first compatible currency
+                    selectedCurrency.innerHTML = `
+                        <img src="${currencies[0].logo}" alt="${currencies[0].name}" width="24">
+                        <span>${currencies[0].name}</span>
+                    `;
+                }
+
+                // Add click handlers for new currency options
+                const newCurrencyOptions = currencyOptions.querySelectorAll('.custom-option');
+                newCurrencyOptions.forEach(option => {
+                    option.addEventListener('click', function () {
+                        const img = this.querySelector('img').cloneNode(true);
+                        const span = this.querySelector('span').cloneNode(true);
+                        selectedCurrency.innerHTML = '';
+                        selectedCurrency.appendChild(img);
+                        selectedCurrency.appendChild(span);
+                        currencyOptions.style.display = 'none';
+
+                        // Update network options based on selected currency
+                        updateNetworkOptionsForCurrency(span.textContent.toUpperCase());
+                    });
+                });
+            }
+
+            // Currency select click handler
+            currencySelect.addEventListener('click', function (e) {
+                const isVisible = currencyOptions.style.display === 'block';
+                currencyOptions.style.display = isVisible ? 'none' : 'block';
+                e.stopPropagation();
+            });
+
+            // Network select click handler
+            networkSelect.addEventListener('click', function (e) {
+                const isVisible = networkOptions.style.display === 'block';
+                networkOptions.style.display = isVisible ? 'none' : 'block';
+                e.stopPropagation();
+            });
+
+            // Close dropdowns when clicking outside
+            document.addEventListener('click', function (e) {
+                if (!currencySelect.contains(e.target)) {
+                    currencyOptions.style.display = 'none';
+                }
+                if (!networkSelect.contains(e.target)) {
+                    networkOptions.style.display = 'none';
+                }
+                if (!accountSelect.contains(e.target)) {
+                    accountOptions.style.display = 'none';
+                }
+            });
+
+            // Initialize with Ethereum currencies
+            updateCurrencyOptionsForNetwork('eth');
+
+            // Initialize network options based on default currency
+            const initialCurrency = currencySelect.querySelector('.selected-currency span')?.textContent.toUpperCase();
+            if (initialCurrency) {
+                updateNetworkOptionsForCurrency(initialCurrency);
+                // Load accounts dropdown
+                loadAccounts();
+            }
+
+            // Add event listeners for preset amount buttons
+
+            // Crypto Form Presets
+            const cryptoPresetBtns = document.querySelectorAll('#cryptoForm .preset-amount-btn');
+            const cryptoAmountInput = document.getElementById('cryptoAmount');
+
+            cryptoPresetBtns.forEach(btn => {
+                btn.addEventListener('click', function () {
+                    cryptoPresetBtns.forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    const amount = this.getAttribute('data-amount');
+                    cryptoAmountInput.value = amount;
+                });
+            });
+
+            if (cryptoAmountInput) {
+                cryptoAmountInput.addEventListener('input', function () {
+                    cryptoPresetBtns.forEach(btn => btn.classList.remove('active'));
+                    const currentValue = this.value.replace(/,/g, '');
+                    cryptoPresetBtns.forEach(btn => {
+                        if (btn.getAttribute('data-amount') === currentValue) {
+                            btn.classList.add('active');
+                        }
+                    });
+                });
+            }
+
+            // Credit Card Form Presets
+            const ccPresetBtns = document.querySelectorAll('.credit-card-preset');
+            const ccAmountInput = document.getElementById('creditCardAmount');
+
+            ccPresetBtns.forEach(btn => {
+                btn.addEventListener('click', function () {
+                    ccPresetBtns.forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    const amount = this.getAttribute('data-amount');
+                    ccAmountInput.value = amount;
+                });
+            });
+
+            if (ccAmountInput) {
+                ccAmountInput.addEventListener('input', function () {
+                    ccPresetBtns.forEach(btn => btn.classList.remove('active'));
+                    const currentValue = this.value.replace(/,/g, '');
+                    ccPresetBtns.forEach(btn => {
+                        if (btn.getAttribute('data-amount') === currentValue) {
+                            btn.classList.add('active');
+                        }
+                    });
+                });
+            }
+        });
+
+        async function handleCreditCardPayment() {
+            const currencySelect = document.querySelector('#creditCardCurrencySelect .selected-currency span');
+            const currency = currencySelect ? currencySelect.textContent : '';
+
+            const amountInput = document.getElementById('creditCardAmount');
+            const amount = amountInput.value;
+            const accountSelect = document.getElementById('creditCardAccountSelect');
+            const accountId = accountSelect ? accountSelect.dataset.id : '';
+            const accountType = accountSelect ? accountSelect.dataset.type : '';
+
+            if (!amount || !currency || !accountId) {
+                showErrorModal('Missing Information', 'Please fill in all fields (Currency, Account, Amount)');
+                return;
+            }
+
+            const depositBtn = document.querySelector('#creditCardForm button[onclick="handleCreditCardPayment()"]');
+            if (depositBtn) depositBtn.disabled = true;
+
+            const loadingScreen = document.getElementById('loadingScreen');
+            if (loadingScreen) loadingScreen.style.display = 'flex';
+
+            try {
+                const accessToken = localStorage.getItem('accessToken');
+                if (!accessToken) {
+                    throw new Error('Not logged in');
+                }
+
+                // Prepare payload
+                // Use the raw amount value provided by the user (as per user request to avoid "hardcoded" multiplied value)
+                const amountValue = parseFloat(amount.replace(/,/g, ''));
+
+                const accountNumber = accountSelect ? accountSelect.dataset.accountNumber : '';
+                const payload = {
+                    amount: amountValue,
+                    currency: currency,
+                    user_id: parseInt(accountId),
+                    user_type: (accountType === 'main' ? 'live' : accountType) || 'live',
+                    description: `Deposit ${amount} ${currency} (Account: ${accountNumber})`
+                };
+
+                console.log('Sending Stripe payload:', payload);
+
+                const response = await fetch('https://testing.livefxhub.com/api/stripe-payments/deposit/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                console.log('Stripe API Response:', result);
+
+                if (loadingScreen) loadingScreen.style.display = 'none';
+                if (depositBtn) depositBtn.disabled = false;
+
+                if (result.status && result.data && result.data.clientSecret) {
+                    // Hide initial form inputs
+                    document.getElementById('creditCardCurrencySelect').closest('.form-group').style.display = 'none';
+                    document.getElementById('creditCardAccountSelect').closest('.form-group').style.display = 'none';
+                    document.getElementById('creditCardAmount').closest('.form-group').style.display = 'none';
+                    if (depositBtn) depositBtn.style.display = 'none';
+
+                    // Initialize Stripe
+                    // TODO: Replace with your actual Stripe Publishable Key
+                    // Since the key is not provided, I am using a placeholder. 
+                    // YOU MUST REPLACE THIS KEY FOR THE CODE TO WORK CORRECTLY.
+                    const stripe = Stripe('pk_test_51SslBZ1S02hMdRKY2rkQbDnudqdYNklbkFujvjm9cfMpaebGuiLmnEC39caQOq7ZdAxFRjNbdKPIKXn4P8LbpLNM00IDxwPV2F');
+
+                    const options = {
+                        clientSecret: result.data.clientSecret,
+                        appearance: {
+                            theme: 'night',
+                            variables: {
+                                colorPrimary: '#36B34B',
+                                colorBackground: '#131722',
+                                colorText: '#ffffff',
+                                colorDanger: '#ff3b30',
+                                fontFamily: 'Arial, sans-serif',
+                                spacingUnit: '4px',
+                                borderRadius: '4px',
+                            },
+                        },
+                    };
+
+                    const elements = stripe.elements(options);
+
+                    // Create the payment element with tabs layout
+                    const paymentElement = elements.create('payment', {
+                        layout: {
+                            type: 'tabs',
+                            defaultCollapsed: false,
+                        }
+                    });
+
+                    const stripeContainer = document.getElementById('stripe-container');
+                    stripeContainer.style.display = 'block';
+
+                    paymentElement.mount('#payment-element');
+
+                    const submitBtn = document.getElementById('stripe-submit');
+
+                    // Remove existing listeners to avoid duplicates if called multiple times (though we hide button so less likely)
+                    const newSubmitBtn = submitBtn.cloneNode(true);
+                    submitBtn.parentNode.replaceChild(newSubmitBtn, submitBtn);
+
+                    newSubmitBtn.addEventListener('click', async () => {
+                        newSubmitBtn.disabled = true;
+                        newSubmitBtn.textContent = 'Processing...';
+                        document.getElementById('stripe-error-message').textContent = '';
+
+                        const { error } = await stripe.confirmPayment({
+                            elements,
+                            confirmParams: {
+                                // Return URL where to redirect after payment
+                                // Removed hardcoded payment_success=true. We will check Stripe's redirect_status in charts.html
+                                return_url: new URL('charts.html', window.location.href).href,
+                            },
+                        });
+
+                        if (error) {
+                            console.error("Stripe Error:", error);
+                            // Use custom modal for errors as requested
+                            // Display the specific message from Stripe (e.g., "Your card was declined.")
+                            showErrorModal('Payment Failed', error.message || 'Your payment method was declined.');
+
+                            // Re-enable button to allow retry
+                            newSubmitBtn.disabled = false;
+                            newSubmitBtn.textContent = 'Pay Now';
+                        } else {
+                            // Success handled by redirect
+                        }
+                    });
+
+                } else {
+                    // Show custom error modal with API message
+                    showErrorModal('Payment Initiation Failed', result.message || 'Unknown error occurred while initiating payment.');
+                }
+
+            } catch (error) {
+                if (loadingScreen) loadingScreen.style.display = 'none';
+                if (depositBtn) depositBtn.disabled = false;
+                console.error('Error:', error);
+
+                // Show custom error modal for exceptions
+                showErrorModal('System Error', 'An error occurred while communicating with the server. Please try again later.');
+            }
+        }
+
+        async function handleCryptoPayment() {
+            try {
+                // Get the selected currency and network
+                const selectedCurrency = document.querySelector('#currencySelect .selected-currency span').textContent;
+                const selectedNetwork = document.querySelector('#networkSelect .selected-currency span').textContent;
+                const cryptoAmount = document.getElementById('cryptoAmount').value;
+
+                // Get user ID and access token from localStorage
+                const selectedAccountId = accountSelect.dataset.id;
+                const selectedAccountType = accountSelect.dataset.type;
+                const accessToken = localStorage.getItem('accessToken');
+
+                if (!cryptoAmount || !selectedCurrency || !selectedNetwork || !selectedAccountId || !selectedAccountType || !accessToken) {
+                    alert('Please fill in all required fields or login again');
+                    return;
+                }
+
+                // Format the currency and network
+                const formattedCurrency = selectedCurrency.toUpperCase();
+
+                // Extract and format network symbol correctly
+                let formattedNetwork;
+                if (selectedNetwork.includes('Ethereum')) {
+                    formattedNetwork = 'ETH';
+                } else if (selectedNetwork.includes('Binance')) {
+                    formattedNetwork = 'BSC';
+                } else if (selectedNetwork.includes('Polygon')) {
+                    formattedNetwork = 'MATIC';
+                } else if (selectedNetwork.includes('TRON')) {
+                    formattedNetwork = 'TRX';
+                }
+
+                // No need to validate combinations here as it's already handled in the UI
+                // The user can only select valid combinations
+
+                // Prepare the request payload
+                let settledCurrency = formattedCurrency;
+                if (formattedCurrency === 'USDT' && formattedNetwork === 'TRX') {
+                    settledCurrency = 'USDT';
+                }
+                const payload = {
+                    baseAmount: cryptoAmount.toString(),
+                    baseCurrency: formattedCurrency,
+                    networkSymbol: formattedNetwork,
+                    settledCurrency: settledCurrency,
+                    user_type: selectedAccountType,
+                    user_id: selectedAccountId
+                };
+
+                console.log('Sending payload:', payload);
+
+                // Show loading screen
+                document.getElementById('loadingScreen').style.display = 'flex';
+
+                // Send POST request to the new API endpoint with bearer token
+                fetch('https://testing.livefxhub.com/api/crypto-payments/deposit', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                })
+                    .then(response => {
+                        // Hide loading screen immediately on response (success or error)
+                        document.getElementById('loadingScreen').style.display = 'none';
+                        return response.json();
+                    })
+                    .then(result => {
+                        console.log('API Response:', result);
+
+                        if ((result.status === 200 || result.status === true) && result.data && result.data.paymentUrl) {
+                            // If successful, redirect to payment URL
+                            const paymentURL = result.data.paymentUrl;
+                            console.log('Redirecting to:', paymentURL);
+                            window.location.href = paymentURL;
+                        } else {
+                            // If error, show alert with error message
+                            alert('Payment processing failed: ' + (result.message || result.error || 'Unknown error'));
+                        }
+                    })
+                    .catch(error => {
+                        // Hide loading screen
+                        document.getElementById('loadingScreen').style.display = 'none';
+                        console.error('Error:', error);
+                        // Show error message
+                        alert('Error processing payment: ' + error.message);
+                    });
+
+            } catch (error) {
+                // Hide loading screen
+                document.getElementById('loadingScreen').style.display = 'none';
+                console.error('Error:', error);
+                alert('An error occurred. Please try again.');
+            }
+        }
+        function showErrorModal(title, message) {
+            const modal = document.getElementById('errorModal');
+            document.getElementById('errorModalTitle').textContent = title;
+            document.getElementById('errorModalMessage').textContent = message;
+            modal.style.display = 'flex';
+        }
+
+        function closeErrorModal() {
+            document.getElementById('errorModal').style.display = 'none';
+        }
+
+        // Close modal if clicked outside
+        window.addEventListener('click', function (event) {
+            const modal = document.getElementById('errorModal');
+            if (event.target === modal) {
+                modal.style.display = "none";
+            }
+        });
+    </script>
+
+    <!-- Custom Error Modal HTML -->
+    <div id="errorModal" class="custom-modal">
+        <div class="custom-modal-content">
+            <span class="custom-modal-close" onclick="closeErrorModal()">&times;</span>
+            <div class="custom-modal-icon error">
+                <i class="fas fa-exclamation-circle"></i>
+            </div>
+            <h3 class="custom-modal-title" id="errorModalTitle">Error</h3>
+            <p class="custom-modal-message" id="errorModalMessage">Something went wrong.</p>
+            <button class="custom-modal-btn" onclick="closeErrorModal()">Dismiss</button>
+        </div>
+    </div>
+</body>
+
+</html>
